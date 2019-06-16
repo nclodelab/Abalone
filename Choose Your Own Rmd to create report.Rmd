@@ -1,0 +1,1089 @@
+---
+title: "Choose Your Own Project N.Clode"
+author: "Nclode"
+date: "15/06/2019"
+output:
+  pdf_document: 
+    fig_caption: yes
+    latex_engine: xelatex
+    number_sections: yes
+    toc: yes
+  html_document:
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+if(!require(PerformanceAnalytics)) install.packages("PerformanceAnalytics")
+if(!require(lubridate)) install.packages("lubridate")
+if(!require(dplyr)) install.packages("dplyr")
+if(!require(tibble)) install.packages("tibble")
+if(!require(tidyverse)) install.packages("tidyverse")
+if(!require(caret)) install.packages("caret")
+if(!require(stringr)) install.packages("stringr")
+if(!require(tidyr)) install.packages("tidyr")
+if(!require(tidyverse)) install.packages("tidyverse")
+if(!require(partitions)) install.packages("partitions")
+if(!require(iterpc)) install.packages("iterpc")
+if(!require(gridExtra)) install.packages("gridExtra")
+if(!require(ggplot2)) install.packages("ggplot2")
+if(!require(car)) install.packages("car")
+if(!require(rpart)) install.packages("rpart")
+if(!require(performanceEstimation)) install.packages("performanceEstimation")
+if(!require(randomForest)) install.packages("randomForest")
+if(!require(MASS)) install.packages("MASS")
+if(!require(mgcv)) install.packages("mgcv")
+if(!require(mlbench)) install.packages("mlbench")
+if(!require(corrplot)) install.packages("corrplot")
+if(!require(Hmisc)) install.packages("Hmisc")
+if(!require(formattable)) install.packages("formattable")
+if(!require(rpart.plot)) install.packages("rpart.plot")
+if(!require(varImp)) install.packages("varImp")
+if(!require(plotmo)) install.packages("plotmo")
+if(!require(ggiraph)) install.packages("ggiraph")
+if(!require(ggiraphExtra)) install.packages("ggiraphExtra")
+if(!require(ggiraphExtra)) install.packages("formatR")
+
+
+
+# Library Packages 
+library(formatR)
+library(PerformanceAnalytics)
+library(lubridate)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(caret)
+library(tidyr)
+library(tidyverse)
+library(partitions)
+library(iterpc)
+library(gridExtra)
+library(ggplot2)
+library(car)
+library(rpart)
+library(performanceEstimation)
+library(randomForest)
+library(caret)
+library(MASS)
+library(mgcv) # GAM
+library(mlbench)
+library(corrplot)
+library(Hmisc)
+library(formattable)
+library(rpart.plot)
+library(varImp)
+library(plotmo)
+library(ggiraph)
+library(ggiraphExtra)
+library(formattable)
+   
+# Define the RMSE function to test the result
+RMSE <- function(True_Rings, Predicted_Rings){
+sqrt(mean((True_Rings - Predicted_Rings)^2))}
+```
+
+
+# Executive Summary
+ 
+__The purpose of this project is to build and train a machine learning model in R that can predict the age of Abalone from its physical attributes.__    
+
+Abalone are marine snails whose shells are used as a popular inlay material and a source of mother of pearl for the jewellery industry.
+The age of abalone is typically determined by counting its Rings though a time-consuming highly manual process, which involves cutting the shell through the cone, staining it, and counting the number of rings through a microscope.
+It would save time and costs if the number of Rings (hence the age) could be deduced from physical attributes of Abalone which are easier to obtain.   
+
+This project will take data of Abalone shells from the Marine Research Laboratories of the Department of Primary Industry and Fisheries in Tasmania
+and use the physical observable attributes: height, diameter, length, weights and sex to train models which predict the number of Rings.
+
+
+## Source
+
+The Abalone Data is sourced from   
+__[link](https://archive.ics.uci.edu/ml/datasets/abalone)__
+Dua, D. and Graff, C. (2019). UCI Machine Learning Repository [https://archive.ics.uci.edu/ml/datasets/abalone]. Irvine, CA: University of California, School of Information and Computer Science.
+
+Data is provided by 
+Marine Resources Division
+Marine Research Laboratories - Taroona
+Department of Primary Industry and Fisheries, Tasmania
+
+## Approach
+
+This project will go beyond a simple Linear regression and train 7 different models using different algorithms which predict the count of Rings based on physical measurements.  
+The Base models trained will be:  
+1. Stepwise Linear Regression  
+2. Regression Tree  
+3. Modal Tree  
+4. Random Forrest  
+5. K Nearest Neighbours  
+6. Generalized Additive Model using Splines  
+7. Multivariate Adaptive Regression Splines  
+
+In addition to the above, I will improve on the individual predictions by generating ensemble models. The ensembles will take predictions of each of the above base models as inputs and then generate a final Prediction.  
+There will be 2 different Ensembles generated   
+1. Ensemble_1: Simple Average, where the Ensemble prediction for a given Abalone is the average prediction of each of the 7 base models  
+2. Ensemble_2: Stepped Linear Regression, where the individual predictions are used as inputs into a regression model to generate the final prediction
+
+## Data Subsets
+
+The abalone dataset is split into subsets for the purpose of training, testing and cross validating.  
+  1.Validation set: This subset is 10% of the total data and is used for testing generating the final RMSE scores only. This data will __not__ be used for training at any stage of the process.
+  
+ 2.The Training set: This subset is 90% of the total data and is used to train the models
+  model. In addition, this set is split into additional subsets which are used for cross validating and training the Ensemble models.
+
+## Read Data & create test & training sets
+
+```{r rload, include =FALSE, cache=TRUE}
+#####################################################################################
+# Note the code assumes the Data is downloaded and saved to the working directory
+#####################################################################################
+# Read in the data 
+full_data <- read.csv("abalone.csv")
+```
+
+```{r subset1, echo=TRUE, cache=TRUE}
+
+# Create the training and testing subsets
+set.seed(5)
+test_index <- createDataPartition(full_data$Rings, times = 1, p = 0.1, list = FALSE)
+train_set <- full_data %>% slice(-test_index)
+test_set <- full_data %>% slice(test_index)
+```
+
+# Data Exploration
+This section explores basic the structure and attributes of the Abalone data.
+```{r explore2, echo=TRUE, cache=TRUE,warning = FALSE, message = FALSE, tidy = TRUE}
+# Explore the data
+  formattable(as.table(summary(full_data)),format = "markdown")
+
+# Row and Column Counts
+  dim(full_data)
+  
+# Classes of each Column
+  as.matrix(sapply(full_data,class))
+  
+# Column Names 
+  names(full_data)
+  
+# Check for N/A's  
+  as.matrix(apply(full_data, 2, function(x) any(is.na(x))))
+  
+# Examine the first 5 rows  
+  formattable(full_data[1:5,] , format = "markdown")
+```
+
+### Observations
+* There are 4177 rows each is of an individual Abalone.
+* There are 9 columns: the dependant variable __Rings__ which is an integer as well as 7 numeric variables (dimensions and weights) and one factor variable Sex which has three options, _Male_, _Female_ and _Infant_
+* There are no N/As in any of the variables
+* The dependant variable __Rings__ Ranges between 1 and 29, and has a Mean of 9.9. The Median is lower than the Mean at 9.0
+
+## Density, Histogram and Box Plots by Sex
+This section examines the  Sex variable
+```{r sex_plots, echo=TRUE, cache=TRUE, message = FALSE, fig.align='center',fig.height = 8, fig.width = 12}
+
+# Density Plot of Rings
+S1 <- full_data %>% ggplot(aes(Rings, color = Sex)) %>% 
+  + geom_density(size=1.5) %>%
++ xlab("Ring Count") %>%
++ ylab("Density") %>%
++ ggtitle("Density Plot Rings by Sex") %>%
++ scale_color_hue(labels = c("Female", "Infant","Male")) %>%
++ scale_colour_brewer(palette = "RdBu") %>%
++ theme_dark()
+
+# Boxplot of Rings by Sex
+S2 <-  full_data %>% ggplot(aes(x=Sex,y=Rings, color = Sex))  %>% 
++ geom_boxplot(size = 1.2) %>%
++ xlab("Sex") %>%
++ ylab("Ring Count") %>%
++ ggtitle("Boxplots of Rings by Sex") %>%  
++ geom_hline(aes(yintercept=median(Rings, na.rm = FALSE))
+             , linetype = 5, color = "black",size = .9) %>%
++ geom_hline(aes(yintercept=mean(Rings, na.rm = FALSE))
+             , linetype = 1, color = "black",size = .9) %>%
++ scale_colour_brewer(palette = "RdBu") %>%
++ theme_dark()  
+
+# Histogram by Rings
+S3 <-  full_data %>% ggplot(aes(Rings,color = Sex))  %>% 
++ geom_histogram(size = 1.2 , alpha=0.5,binwidth=1) %>%
++ xlab("Sex") %>%
++ ylab("Ring Count") %>%
++ ggtitle("Histogram of Rings") %>%  
++ scale_colour_brewer(palette = "RdBu") %>%
++ scale_x_continuous(breaks = seq(0, 30, by = 1)) %>%
++ theme_dark()  
+
+# Arrange the Plots
+grid.arrange(S1, S2, S3, ncol = 2)
+```
+
+### Observations
+* The boxplot shows the mean Ring count _(solid black line)_ lines up with the mean Ring count for both Male and Female Abalones
+* The median _(dashed black line)_ is lower than the mean) Possibly due to outliers of older Abalone. 
+* Infant abalone has lower Mean, Median and Range than both Male and Female.
+* The abalone with the lowest Ring Count is an Infant and the abalone with the highest ring count is Female
+* The Male and Female Densities are very similar; however the Infant density is observably is lower.
+
+## Plots of Abalone Dimension variables against Rings 
+This Section plots the dependant Variable Rings against each of the dimensions variables split by Sex.
+```{r s, echo=TRUE, cache=TRUE, message = FALSE, fig.align='center',fig.height = 5, fig.width = 12}
+# Length plot
+L <-  full_data %>% ggplot(aes(Length, Rings, color = Sex)) %>%
++ geom_point() %>%
++ xlab("Shell Length") %>%
++ ylab("Ring Count") %>%
++ ggtitle("Ring Count vs Length") %>%
++ scale_colour_brewer(palette = "RdBu",guide=FALSE) %>%  
++ theme_dark()%>%
++  stat_smooth(method = "lm", se = FALSE)
+# Diameter plot
+D <- full_data %>% ggplot(aes(Diameter, Rings, color = Sex)) %>%
++ geom_point() %>%
++ xlab("Shell Diameter") %>%
++ ylab("Ring Count") %>%
++ ggtitle("Ring Count vs Diameter") %>%
++ scale_colour_brewer(palette = "RdBu",guide=FALSE) %>%
++ theme_dark()%>%
++  stat_smooth(method = "lm", se = FALSE)
+# Height plot
+H <- full_data %>% ggplot(aes(Height, Rings, color = Sex)) %>%
++ geom_point() %>%
++ xlab("Shell Height") %>%
++ ylab("Ring Count") %>%
++ ggtitle("Ring Count vs Height") %>%
++ scale_color_hue(labels = c("Female", "Infant", "Male")) %>%
++ scale_colour_brewer(palette = "RdBu") %>%
++ theme_dark() %>%
++  stat_smooth(method = "lm", se = FALSE)
+
+# Arrange the plots
+grid.arrange(L, D,H, widths = c(1.65, 1.65,2))
+
+
+```
+
+### Observations
+The above charts show Rings by the variables Shell Length, Shell Diameter, and Shell Height  
+*  Infant Abalone values are concentrated in the lower left-hand corner for all three attributes
+*  The Variation in Rings is high for Shell Lengths and Shell Diameters above ~0.4
+*  There are 2 outliers in Shell Height one Female and one Male
+
+## Plots of Abalone Weights against Rings
+This Section produces the same style plots for the weight variables split by Sex
+```{r g, echo=TRUE, cache=TRUE, message = FALSE, fig.align='center',fig.height = 10, fig.width = 12}
+# Whole Weight plot
+WW <-  full_data %>% ggplot(aes(Whole.weight, Rings, color = Sex)) %>%
++ geom_point() %>%
++ xlab("Whole.weight") %>%
++ ylab("Ring Count") %>%
++ ggtitle("Whole.weight") %>%
++ scale_colour_brewer(palette = "RdBu",guide=FALSE) %>%  
++ theme_dark()%>%
++  stat_smooth(method = "lm", se = FALSE)
+# Shucked Weight plot
+SUW <- full_data %>% ggplot(aes(Shucked.weight, Rings, color = Sex)) %>%
++ geom_point() %>%
++ xlab("Shucked.weight ") %>%
++ ylab("Ring Count") %>%
++ ggtitle("Shucked.weight ") %>%
++ scale_color_hue(labels = c("Female", "Infant", "Male")) %>%    
++ scale_colour_brewer(palette = "RdBu") %>%
++ theme_dark()%>%
++  stat_smooth(method = "lm", se = FALSE)
+# Viscera Weight plot
+VW <- full_data %>% ggplot(aes(Viscera.weight, Rings, color = Sex)) %>%
++ geom_point() %>%
++ xlab("Viscera.weight ") %>%
++ ylab("Ring Count") %>%
++ ggtitle("Viscera.weight ") %>%
++ scale_colour_brewer(palette = "RdBu",guide=FALSE) %>%  
++ theme_dark()%>%
++  stat_smooth(method = "lm", se = FALSE)
+# Shell Weight plot
+SEW <- full_data %>% ggplot(aes(Shell.weight, Rings, color = Sex)) %>%
++ geom_point() %>%
++ xlab("Shell.weight") %>%
++ ylab("Ring Count") %>%
++ ggtitle("Shell.weight") %>%
++ scale_color_hue(labels = c("Female", "Infant", "Male")) %>%    
++ scale_colour_brewer(palette = "RdBu") %>%
++ theme_dark()%>%
++  stat_smooth(method = "lm", se = FALSE)
+  
+# Arrange the plots
+grid.arrange(WW, SUW,VW,SEW ,ncol = 2, widths = c(1.75,2),heights = c(2,2))
+```
+### Observations
+The above charts show Rings by the each of the weight variables split by Sex  
+* Infant Abalone values are concentrated in the lower left-hand corner for all attributes  
+* There are outliers in all 4 variables in the higher values.  
+* The linear trend lines do not fit models particularly well due to variation, especially with male and female abalone
+
+## Full Correlation Chart
+This section will plot the correlation chart for all numeric variables. 
+```{r plots,  cache=TRUE, message = FALSE, fig.align='center'}
+my_data <- full_data[, 2:9]
+chart.Correlation(my_data, histogram=TRUE, pch=2) 
+```
+### Observations
+The above plot shows the distribution of each numeric variable on the diagonal.  
+Bivariate scatter plots with a fitted line are displayed on the bottom of the diagonal
+The values of the correlation plus the significance level as stars are displayed on the top of the diagonal   
+
+Most of the measurements have high correlations with each other but only moderate correlations with the dependant variable Rings  
+
+## Correlation of each Variable to Rings
+This section examines more closely the correlation between Rings and each numeric variable individually, by splitting the data by Sex
+```{r k, echo=TRUE, cache=TRUE, message = FALSE}
+# Create 3 separate subsets, one for each Sex
+full_M <- full_data %>% filter(Sex == "M")
+full_I <- full_data %>% filter(Sex == "I")
+full_F <- full_data %>% filter(Sex == "F")
+
+# Calculate the correlation with Rings of each variable individually split by Sex
+   Correltations_with_rings <-  as.data.frame(rbind(
+       c(Variable = "Length"
+         ,Correlation = round(cor(full_data$Rings,full_data$Length),4)
+         ,Correlation_Male = round(cor(full_M$Rings,full_M$Length),4)
+         ,Correlation_Female = round(cor(full_F$Rings,full_F$Length),4)
+         ,Correlation_Infant = round(cor(full_I$Rings,full_I$Length),4)),    
+       c(Variable = "Diameter"
+         ,Correlation = round(cor(full_data$Rings,full_data$Diameter),4)
+         ,Correlation_Male = round(cor(full_M$Rings,full_M$Diameter),4)
+         ,Correlation_Female = round(cor(full_F$Rings,full_F$Diameter),4)
+         ,Correlation_Infant = round(cor(full_I$Rings,full_I$Diameter),4)),  
+       c(Variable = "Height"
+         ,Correlation = round(cor(full_data$Rings,full_data$Height),4)
+         ,Correlation_Male = round(cor(full_M$Rings,full_M$Height),4)
+         ,Correlation_Female = round(cor(full_F$Rings,full_F$Height),4)
+         ,Correlation_Infant = round(cor(full_I$Rings,full_I$Height),4)),  
+       c(Variable = "Whole.weight"
+         ,Correlation = round(cor(full_data$Rings,full_data$Whole.weight),4)
+         ,Correlation_Male = round(cor(full_M$Rings,full_M$Whole.weight),4)
+         ,Correlation_Female = round(cor(full_F$Rings,full_F$Whole.weight),4)
+         ,Correlation_Infant = round(cor(full_I$Rings,full_I$Whole.weight),4)),           
+       c(Variable = "Shucked.weight"
+         ,Correlation = round(cor(full_data$Rings,full_data$Shucked.weight),4)
+         ,Correlation_Male = round(cor(full_M$Rings,full_M$Shucked.weight),4)
+         ,Correlation_Female = round(cor(full_F$Rings,full_F$Shucked.weight),4)
+         ,Correlation_Infant = round(cor(full_I$Rings,full_I$Shucked.weight),4)),           
+       c(Variable = "Viscera.weight"
+         ,Correlation = round(cor(full_data$Rings,full_data$Viscera.weight),4)
+         ,Correlation_Male = round(cor(full_M$Rings,full_M$Viscera.weight),4)
+         ,Correlation_Female = round(cor(full_F$Rings,full_F$Viscera.weight),4)
+         ,Correlation_Infant = round(cor(full_I$Rings,full_I$Viscera.weight),4)),    
+       c(Variable = "Shell.weight"
+         ,Correlation = round(cor(full_data$Rings,full_data$Shell.weight),4)
+         ,Correlation_Male = round(cor(full_M$Rings,full_M$Shell.weight),4)
+         ,Correlation_Female = round(cor(full_F$Rings,full_F$Shell.weight),4)
+         ,Correlation_Infant = round(cor(full_I$Rings,full_I$Shell.weight),4))))
+
+      # Format the table
+        formattable(Correltations_with_rings,align =c("l","l","l", "l","l")
+             ,format = "markdown",
+                list(`Variable` = formatter("span"
+                  ,style = ~ style(color = "black",font.weight = "bold"))))
+      
+     
+```
+
+### Observations
+* When not split by Sex, the correlation between Shell.weight and Rings is the highest at 0.6276 
+* When not split by Sex, the correlation between Whole.Weight and Rings is the lowest at 0.4209  
+* When each Variable is split by Sex however, the individual correlations between Rings and each numeric variable is higher for Infant, but lower for both Male and Female. 
+
+# Base Models
+This section trains each of the Base models using train_set data.  
+Each model is then evaluated by predicting Rings on the test_set data and generating an RMSE score.
+
+## Linear Regression
+The first model trained is a simple Linear Regression
+```{r regression, echo=TRUE, cache=TRUE}
+# Linear regression
+# Train the Linear Regression model using the train_set  
+set.seed(1) 
+lm.Rings <- lm(Rings ~., data = train_set)
+summary(lm.Rings)  
+
+```  
+
+### Linear Regression Details
+
+* Looking at the model trained, all coefficients are statistically significant at the 99% level except for __Sex = M__  and __Length__
+* In addition the null hypothesis that there is __no__ dependence of Rings on any of the explanatory variables, can be rejected at the 99% level due to the small F statistic p-value.
+* The R Squared of 0.533 means approximately half the variation in Rings is explained by the model.
+
+### Use Backwards Stepwise Model selection to improve the regression.
+This section uses AIC from the MASS package to check if the model can be improved by removing some of the variables
+
+```{r regression2, echo=TRUE, cache=TRUE}
+  # Stepwise Regression using MASS
+
+  # Improve the model by performing a backwards stepwise regression
+  lm.step.Rings  <- stepAIC(lm.Rings, direction="backward")
+  summary(lm.step.Rings)
+  #length is removed as a predictor variable
+  
+  # Compare the two models
+  anova(lm.Rings, lm.step.Rings)
+  
+  #F statistic is high so we cannot reject the null hypothesis that the models are different
+```
+
+The length variable has been removed for the final model. 
+When the 2 regression models are compared with the Anova test, the high F statistic p-value means that we cannot reject the null hypothesis that the models are different. 
+
+### Plotting the final Model
+```{r regression plot, echo=TRUE, cache=TRUE, message = FALSE, fig.align='center',fig.height = 10, fig.width = 12}
+  layout(matrix(c(1,2,3,4),2,2)) # optional 4 graphs/page 
+  plot(lm.step.Rings)
+```
+### Observations
+* The Residuals deviate from the line in the QQ plot which challenges the normality assumption
+* Residuals vs Fitted shows a slight curve which some non-linearity in the data was not explained by the model
+* Residuals vs Leverage shows an outlier at 1835 which is outside Cooks distance and is influencing the regression result
+
+### Liner Model RMSE
+Predict Rings using the test set data with the linear model and generate the RMSE score
+```{r LM_RMSE, echo=TRUE, cache=TRUE,  fig.align='center',fig.height = 10, fig.width = 12}
+   # 1 Linear Regression
+   lm.predictions.Rings <- predict(lm.step.Rings, test_set)
+   lm.RMSE <- RMSE(lm.predictions.Rings,test_set$Rings)
+   lm.RMSE
+```
+
+## Regression Tree with rpart
+
+This section trains a regression tree using rpart. The models tuning parameters are selected using cross validation
+```{r RTree, echo=TRUE, cache=TRUE}
+  set.seed(1) 
+#Train the Model
+  rt.Rings <- train(Rings ~ ., 
+                       method = "rpart",
+                       tuneGrid = data.frame(cp = seq(0, 0.1, len = 25)),
+                       data = train_set)
+ rt.Rings
+```
+
+### Plot of the Regression Tree
+```{r RTree_plots, echo=TRUE, cache=TRUE}
+ #Plot the Regression Tree with Rpart Plot
+ rpart.plot(rt.Rings$finalModel, type = 2, extra =1,shadow.col = "darkgray",tweak = 1.3)
+```
+The above diagram shows the regression tree generated and the decisions at each node as well as the number of observations at each
+
+### Regression Tree RMSE
+Predict Rings using the test set data with the regression tree and generate the RMSE score
+```{r RT_RMSE, echo=TRUE, cache=TRUE}
+ # 2 Regression Tree using R part
+   rt.predictions.Rings <- predict(rt.Rings, test_set)
+   rt.RMSE <- RMSE(rt.predictions.Rings,test_set$Rings)
+   rt.RMSE
+```
+In this case the Regression tree did not perform better than the linear Regression
+
+## Modal Tree Using Cubist
+
+Model trees improve on regression trees by replacing the leaf nodes with regression models.   
+This may result in more accurate results than regression trees, which use only a single value for prediction at the leaf nodes.  
+
+Cubist uses the concept of _committees_ that develops a series of trees sequentially with adjusted weights. The final prediction is the simple average of predictions from all _committee_ members  
+
+This section uses Cubist to train a Model Tree. The models tuning parameters _committees_ and _neighbo n   rs_ are selected using cross validation
+```{r Cubist, echo=TRUE, cache=TRUE}
+ # Modal Tree Using Cubist
+ 
+ # Set the grid to train the model
+ mt.grid <- expand.grid(committees = c(1, 10, 50, 100),
+                     neighbors = c(0, 1, 5, 9))
+ set.seed(1) 
+ # Set the grid to train the model
+ Modal_Tree.Rings <- train(Rings ~ ., 
+                           method = "cubist", 
+                           data = train_set,   
+                           tuneGrid = mt.grid,
+                           trControl = trainControl(method = "cv")
+                            )
+
+ # Final Model  
+   Modal_Tree.Rings
+   Modal_Tree.Rings$finalModel
+```
+10 committees and 0 neighbours were selected.
+
+
+### Modal Tree RMSE
+Predict Rings using the test set data with the regression tree and generate the RMSE score
+```{r MT_RMSE, echo=TRUE, cache=TRUE}
+ # 2 Regression Tree using R part
+   Modal_tree.predictions.Rings <- predict(Modal_Tree.Rings, test_set)
+   Modal_tree.RMSE <- RMSE(Modal_tree.predictions.Rings,test_set$Rings)
+   Modal_tree.RMSE
+```
+In this case the Modal Tree performs better than the Regression Tree and the Linear Regression model
+ 
+## Random Forrest
+
+Random Forests combines the output of multiple decision trees and then generates its own output. 
+Random Forest works on the same principle as decision Tress; however, it does not select all the data points and variables in each of the trees. It randomly samples data points and variables in each of the tree that it creates and then combines the output at the end.  
+
+This Section trains a Random Forrest Model
+```{r Random_Forrest, echo=TRUE, cache=TRUE}
+ # Random Forrest
+
+ set.seed(2) 
+ rf.Rings <- randomForest(Rings ~., data = train_set,ntree=500)
+ rf.Rings
+
+```
+
+### Random Forrest RMSE
+Use the Random Forrest model to predict Rings with the test set.
+```{r RF_RMSE, echo=TRUE, cache=TRUE}
+   # 4 Random Forrest RMSE
+   rf.predictions.Rings <- predict(rf.Rings, test_set)
+   rf.RMSE <- RMSE(rf.predictions.Rings,test_set$Rings)
+   rf.RMSE
+```
+In this case the Random Forrest performed similarly to the Modal Tree
+
+## K Nearest Neighbours Regression Model (KNN)
+ 
+KNN  uses similarity to predict values of any new data points.  
+This means that the new point is assigned a value based on how closely it resembles the points in the training set.
+
+This Section trains a KNN Model. The Tuning parameter _k_ is selected using cross validation
+```{r KNN, echo=TRUE, cache=TRUE}
+ # KNN
+
+ set.seed(1) 
+ ctrl <- trainControl(method="repeatedcv",repeats = 10)
+ 
+ knn_grid  <- data.frame(k = seq(3, 30, 2))
+ knn.Rings <- train(Rings ~ ., 
+                    method = "knn", 
+                    data = train_set,
+                    tuneGrid = knn_grid
+                     )
+
+ # Model Training results
+ formattable(knn.Rings$results,format = "markdown")
+
+ # Final Model Chosen
+ knn.Rings$finalModel
+```
+
+### K Nearest Neighbours RMSE
+Use the 25-nearest neighbour KNN regression model to predict Rings with the test set.
+```{r K_RMSE, echo=TRUE, cache=TRUE}
+   # 5 K Nearest Neighbours RMSE
+   knn.predictions.Rings <- predict(knn.Rings, test_set)
+   knn.RMSE <- RMSE(knn.predictions.Rings,test_set$Rings)
+   knn.RMSE
+```
+
+## Generalized Additive Model (GAM) 
+
+GAMs are a class of statistical Model in which the Linear relationship between the Response and Predictors are replaced by several Non-linear smooth functions (Splines) to model and capture the Non linearities in the data. 
+
+This section will train a GAM model.
+```{r GAM, echo=TRUE, cache=TRUE}
+ # Generalized Additive Model using Splines 
+ set.seed(1) 
+ gam.Rings <- train(Rings ~ ., method = "gam", data = train_set)
+ summary(gam.Rings)
+ gam.Rings$finalModel	 
+```
+ The R squared of the GAM model is higher than that of the linear regression meaning this model can explain more of the Variation in Rings than the linear regression.
+ 
+```{r gam_plot, echo=TRUE, cache=TRUE, message = FALSE, fig.align='center'}
+layout(matrix(c(1,2,3,4),2,2)) # optional 4 graphs/page 
+plot(gam.Rings$finalModel)
+```
+ 
+
+The above shows plots for each variable included in the Model.  
+The X-axis contains the variable values itself and the Y-axis contains the Response values Rings  
+The curvy shapes for each of the variables is due to the Smoothing splines which models the Non linearities in the data.  
+The dotted Lines around the main curve lines are the Standard Error Bands.  
+
+GAM appears to be an effective way of fitting Non-linear functions on several variables
+
+###  Generalized Additive Model using Splines 
+Use the GAM model to predict Rings with the test set and generate the RMSE score.
+```{r GA_RMSE, echo=TRUE, cache=TRUE}
+   # Generalized Additive Model using Splines 
+   gam.predictions.Rings <- predict(gam.Rings, test_set)
+   gam.predictions.Rings.RMSE <- RMSE(gam.predictions.Rings,test_set$Rings)
+   gam.predictions.Rings.RMSE
+```
+
+## Multivariate Adaptive Regression Splines (MARS) Model
+
+This algorithm can capture any nonlinearity aspects of regression by assessing cut points called knots (similar to step functions). The procedure assesses each data point for each predictor as a knot and creates a linear regression model with the candidate feature(s).
+
+This section will train a MARS model. Tuning parameters are selected using cross validation
+```{r MARS, echo=TRUE, cache=TRUE}
+ 
+# Create a grid needed to pick the tuning parameters via cross validation
+ hyper_grid <- expand.grid(
+   degree = 1:3, 
+   nprune = seq(2, 100, length.out = 10) %>% floor()
+ )
+ 
+   earth.Rings_Tuned <- train(
+    Rings ~ .,
+     method = "earth",
+     metric = "RMSE",
+     trControl = trainControl(method = "cv", number = 10),
+     tuneGrid = hyper_grid,
+     data = train_set
+   )
+   
+ #  Show the best model best tune
+   earth.Rings_Tuned$bestTune
+   
+ #  Show the final model
+  earth.Rings_Tuned$finalModel
+    summary(earth.Rings_Tuned$finalModel)
+
+```
+
+### Plot the MARS Model
+```{r MARS_PLOT, echo=TRUE, cache=TRUE, fig.align='center'}
+layout(matrix(c(1,2,3,4),2,2)) # optional 4 graphs/page 
+plot( earth.Rings_Tuned$finalModel)
+```
+
+
+### MARS
+Use the MARS model to predict Rings with the test set.
+```{r MA_RMSE, echo=TRUE, cache=TRUE}
+   # Multivariate Adaptive Regression Splines MARS 
+   earth.predictions.Rings <- predict(earth.Rings_Tuned, test_set)
+   earth.RMSE <- RMSE(earth.predictions.Rings,test_set$Rings) 
+   earth.RMSE
+```
+
+
+## Base Model Results
+
+The below charts show the RMSE scores of each of the Base models trained with the train set data and predicting Rings with the test set data
+```{r RESULTS1, echo=TRUE, cache=TRUE}
+# Make predictions on test set and compare RMSE
+
+   model_results <- as.data.frame(
+      
+      rbind(
+         c(model = "Linear Regression"
+           , RMSE =  round(lm.RMSE,6))
+         ,c(model = "Regression Tree using rpart"
+            , RMSE =  round(rt.RMSE,6))
+         ,c(model = "Modal Tree using Cubist"
+            , RMSE = round(Modal_tree.RMSE,6))
+         ,c(model = "Random Forrest"
+            , RMSE =  round(rf.RMSE,6))
+         ,c(model = "K Nearest Neighbours"
+            , RMSE =  round(knn.RMSE,6))
+         ,c(model = "Generalized Additive Model using Splines GAM"
+            , RMSE =  round(gam.predictions.Rings.RMSE,6))
+         ,c(model = "Multivariate Adaptive Regression Splines MARS"
+            , RMSE =  round(earth.RMSE,6)) 
+         )
+      )       
+         
+   
+   formattable(model_results, format = "markdown")
+   
+```
+### Observations
+* All models except the rpart Regression Tree have outperformed the Linear Regression
+* The best performing Model is the Modal Tree using Cubist, closely followed by the MARS Model.
+
+# Ensemble Models to improve RMSE
+
+In order to improve upon the Base Models, this section will train Ensemble models which take predictions of the base models as an input to generate the final prediction.  
+
+The First is a simple average of all the predictions, while the second uses a Linear regression across the predictions of each base model generate a final prediction.
+
+
+## Ensemble 1 - Simple Average.
+This Section makes predictions on the Test Set by Averaging each Prediction from the 7 Base Models
+```{r ENS1, echo=TRUE, cache=TRUE}
+   # Matrix of predictions of each of the base models for the test set data
+   preds_v1 <- as.data.frame(cbind(lm.predictions.Rings
+                 ,rt.predictions.Rings
+                 ,Modal_tree.predictions.Rings
+                 ,rf.predictions.Rings
+                 ,knn.predictions.Rings
+                 ,gam.predictions.Rings
+                 ,earth.predictions.Rings))
+   
+   names(preds_v1) <- c("lm","rpart","Cubist","rf","knn","gam","Mars")
+
+   
+   # Ensemble 1 Predictions
+   ens_v1.pred = as.matrix(rowMeans(preds_v1))
+   
+   #Ensemble 1 RMSE
+   ens_v1.RMSE <- RMSE(ens_v1.pred,test_set$Rings)   
+   ens_v1.RMSE
+   
+```
+
+In this Case the Ensemble model 1 did not outperform the Modal Tree.
+
+
+## Ensemble 2 - Linear Regression
+
+This section will create a more sophisticated ensemble model by which the predictions of the base models are taken as inputs for a linear regression ensemble which outputs a final Rings prediction. 
+
+__We cannot use the test set data to train the ensemble model in any circumstance__  
+This means that in order to train the ensemble regression model, we need to take the train data and create k folds of train subsets (train_cv) and test subsets (test_cv) which will be used to generate new base model predictions as an input to train the Ensemble
+
+
+### Create Subsets of the train set data
+
+This section creates 5 folds of train_cv and test_cv subsets of the train set data
+```{r ENS2, echo=TRUE, cache=TRUE}
+   # Ensemble Cross Validations
+
+  # Create 5 folds from the train set data  
+   set.seed(5) 
+   train_set_index_cv <- createDataPartition(train_set$Rings
+                                             , times = 5, p = 0.1, list = FALSE)
+   train_cv1 <- train_set %>% slice(-train_set_index_cv[,1])
+   test_cv1 <- train_set %>% slice(train_set_index_cv[,1])
+   
+   train_cv2 <- train_set %>% slice(-train_set_index_cv[,2])
+   test_cv2 <- train_set %>% slice(train_set_index_cv[,2])
+   
+   train_cv3 <- train_set %>% slice(-train_set_index_cv[,3])
+   test_cv3 <- train_set %>% slice(train_set_index_cv[,3])
+   
+   train_cv4 <- train_set %>% slice(-train_set_index_cv[,4])
+   test_cv4 <- train_set %>% slice(train_set_index_cv[,4])
+   
+   train_cv5 <- train_set %>% slice(-train_set_index_cv[,5])
+   test_cv5 <- train_set %>% slice(train_set_index_cv[,5])
+   
+```
+
+## Fit each Base Model with the new train_cv subsets and predict using the test_cv subsets.
+
+This section retrains each base model with each of the 5 folds of train_cv and test_cv data
+```{r ENS_Train, include = TRUE, echo=TRUE, cache=TRUE, warning = FALSE, message = FALSE, results="hide" }
+    ###############################################
+   # This code can take several minutes to run
+   ###############################################     
+
+   # Fit each model to the train_cv folds
+   # Predict on each of the test_cv folds
+
+   # Backwards Stepped Linear Regression Model
+ 
+   lm.ens.cv1 <- stepAIC(lm(Rings ~., data = train_cv1), direction="backward")
+   lm.ens.cv2 <- stepAIC(lm(Rings ~., data = train_cv2), direction="backward")
+   lm.ens.cv3 <- stepAIC(lm(Rings ~., data = train_cv3), direction="backward")
+   lm.ens.cv4 <- stepAIC(lm(Rings ~., data = train_cv4), direction="backward")
+   lm.ens.cv5 <- stepAIC(lm(Rings ~., data = train_cv5), direction="backward")
+   
+   pred_lm.ens.cv1 <- predict(lm.ens.cv1, test_cv1)
+   pred_lm.ens.cv2 <- predict(lm.ens.cv2, test_cv2)
+   pred_lm.ens.cv3 <- predict(lm.ens.cv3, test_cv3)
+   pred_lm.ens.cv4 <- predict(lm.ens.cv4, test_cv4)
+   pred_lm.ens.cv5 <- predict(lm.ens.cv5, test_cv5)
+
+   # rpart Regression Tree
+   
+   rt.ens.cv1 <- train(Rings ~ ., method = "rpart"
+                       , tuneGrid = data.frame(cp = seq(0, 0.1, len = 25)), data = train_cv1)   
+   rt.ens.cv2 <- train(Rings ~ ., method = "rpart"
+                       , tuneGrid = data.frame(cp = seq(0, 0.1, len = 25)), data = train_cv2)   
+   rt.ens.cv3 <- train(Rings ~ ., method = "rpart"
+                       , tuneGrid = data.frame(cp = seq(0, 0.1, len = 25)), data = train_cv3)   
+   rt.ens.cv4 <- train(Rings ~ ., method = "rpart"
+                       , tuneGrid = data.frame(cp = seq(0, 0.1, len = 25)), data = train_cv4)   
+   rt.ens.cv5 <- train(Rings ~ ., method = "rpart"
+                       , tuneGrid = data.frame(cp = seq(0, 0.1, len = 25)), data = train_cv5)   
+   
+   pred_rt.ens.cv1 <- predict(rt.ens.cv1, test_cv1)
+   pred_rt.ens.cv2 <- predict(rt.ens.cv2, test_cv2)
+   pred_rt.ens.cv3 <- predict(rt.ens.cv3, test_cv3)
+   pred_rt.ens.cv4 <- predict(rt.ens.cv4, test_cv4)
+   pred_rt.ens.cv5 <- predict(rt.ens.cv5, test_cv5)
+   
+   # Modal Tree using Cubist
+   
+   Modal_Tree.ens.cv1 <- train(Rings ~ ., method = "cubist"
+                               , data = train_cv1, tuneGrid = mt.grid
+                               ,trControl = trainControl(method = "cv"))
+   Modal_Tree.ens.cv2 <- train(Rings ~ ., method = "cubist"
+                               , data = train_cv2, tuneGrid = mt.grid
+                               ,trControl = trainControl(method = "cv"))
+   Modal_Tree.ens.cv3 <- train(Rings ~ ., method = "cubist"
+                               , data = train_cv3, tuneGrid = mt.grid
+                               ,trControl = trainControl(method = "cv"))
+   Modal_Tree.ens.cv4 <- train(Rings ~ ., method = "cubist"
+                               , data = train_cv4, tuneGrid = mt.grid
+                               ,trControl = trainControl(method = "cv"))
+   Modal_Tree.ens.cv5 <- train(Rings ~ ., method = "cubist"
+                               , data = train_cv5, tuneGrid = mt.grid
+                               ,trControl = trainControl(method = "cv"))
+   
+   pred_Modal_Tree.ens.cv1 <- predict(Modal_Tree.ens.cv1, test_cv1)
+   pred_Modal_Tree.ens.cv2 <- predict(Modal_Tree.ens.cv2, test_cv2)
+   pred_Modal_Tree.ens.cv3 <- predict(Modal_Tree.ens.cv3, test_cv3)
+   pred_Modal_Tree.ens.cv4 <- predict(Modal_Tree.ens.cv4, test_cv4)
+   pred_Modal_Tree.ens.cv5 <- predict(Modal_Tree.ens.cv5, test_cv5)
+      
+   # Random Forrest  
+   
+   rf.cv1 <- randomForest(Rings ~., data = train_cv1,ntree=500)
+   rf.cv2 <- randomForest(Rings ~., data = train_cv2,ntree=500)   
+   rf.cv3 <- randomForest(Rings ~., data = train_cv3,ntree=500)   
+   rf.cv4 <- randomForest(Rings ~., data = train_cv4,ntree=500)   
+   rf.cv5 <- randomForest(Rings ~., data = train_cv5,ntree=500) 
+   
+   pred_rf.ens.cv1 <- predict(rf.cv1, test_cv1)
+   pred_rf.ens.cv2 <- predict(rf.cv2, test_cv2)
+   pred_rf.ens.cv3 <- predict(rf.cv3, test_cv3)
+   pred_rf.ens.cv4 <- predict(rf.cv4, test_cv4)
+   pred_rf.ens.cv5 <- predict(rf.cv5, test_cv5) 
+   
+   # K Nearest Neighbours KNN
+   
+   knn.cv1 <- train(Rings ~ .,method = "knn", data = train_cv1,tuneGrid = knn_grid)
+   knn.cv2 <- train(Rings ~ .,method = "knn", data = train_cv2,tuneGrid = knn_grid)
+   knn.cv3 <- train(Rings ~ .,method = "knn", data = train_cv3,tuneGrid = knn_grid)
+   knn.cv4 <- train(Rings ~ .,method = "knn", data = train_cv4,tuneGrid = knn_grid)
+   knn.cv5 <- train(Rings ~ .,method = "knn", data = train_cv5,tuneGrid = knn_grid)
+   
+   pred_knn.ens.cv1 <- predict(knn.cv1, test_cv1)
+   pred_knn.ens.cv2 <- predict(knn.cv2, test_cv2)
+   pred_knn.ens.cv3 <- predict(knn.cv3, test_cv3)
+   pred_knn.ens.cv4 <- predict(knn.cv4, test_cv4)
+   pred_knn.ens.cv5 <- predict(knn.cv5, test_cv5) 
+   
+   # Generalized Additive Model using Splines (GAM)
+   
+   gam.cv1 <- train(Rings ~ ., method = "gam", data = train_cv1)
+   gam.cv2 <- train(Rings ~ ., method = "gam", data = train_cv2)
+   gam.cv3 <- train(Rings ~ ., method = "gam", data = train_cv3)
+   gam.cv4 <- train(Rings ~ ., method = "gam", data = train_cv4)
+   gam.cv5 <- train(Rings ~ ., method = "gam", data = train_cv5)
+   
+   pred_gam.ens.cv1 <- predict(gam.cv1, test_cv1)
+   pred_gam.ens.cv2 <- predict(gam.cv2, test_cv2)
+   pred_gam.ens.cv3 <- predict(gam.cv3, test_cv3)
+   pred_gam.ens.cv4 <- predict(gam.cv4, test_cv4)
+   pred_gam.ens.cv5 <- predict(gam.cv5, test_cv5)    
+   
+  ### Multivariate Adaptive Regression Splines (MARS) 
+   
+   earth.cv1 <- train(Rings ~ .,method = "earth",metric = "RMSE"
+                      ,trControl = trainControl(method = "cv"
+                                                , number = 10),tuneGrid = hyper_grid,data = train_cv1)
+   earth.cv2 <- train(Rings ~ .,method = "earth",metric = "RMSE"
+                      ,trControl = trainControl(method = "cv"
+                                                , number = 10),tuneGrid = hyper_grid,data = train_cv2)
+   earth.cv3 <- train(Rings ~ .,method = "earth",metric = "RMSE"
+                      ,trControl = trainControl(method = "cv"
+                                                , number = 10),tuneGrid = hyper_grid,data = train_cv3) 
+   earth.cv4 <- train(Rings ~ .,method = "earth",metric = "RMSE"
+                      ,trControl = trainControl(method = "cv"
+                                                , number = 10),tuneGrid = hyper_grid,data = train_cv4)
+   earth.cv5 <- train(Rings ~ .,method = "earth",metric = "RMSE"
+                      ,trControl = trainControl(method = "cv"
+                                                , number = 10),tuneGrid = hyper_grid,data = train_cv5)
+   
+   pred_earth.ens.cv1 <- predict(earth.cv1, test_cv1)
+   pred_earth.ens.cv2 <- predict(earth.cv2, test_cv2)
+   pred_earth.ens.cv3 <- predict(earth.cv3, test_cv3)
+   pred_earth.ens.cv4 <- predict(earth.cv4, test_cv4)
+   pred_earth.ens.cv5 <- predict(earth.cv5, test_cv5)    
+
+```
+
+Create a matrix of predictions for each test_cv subset
+```{r Ens_Preds, echo=TRUE, cache=TRUE}
+  
+   # Create a matrix of predictions
+   cv1 <- as.matrix(cbind(pred_lm.ens.cv1
+                          ,pred_rt.ens.cv1
+                          ,pred_Modal_Tree.ens.cv1
+                          ,pred_rf.ens.cv1
+                          ,pred_knn.ens.cv1
+                          ,pred_gam.ens.cv1
+                          ,pred_earth.ens.cv1
+                          ,test_cv1$Rings))
+                          
+   cv2 <- as.matrix(cbind(pred_lm.ens.cv2
+                          ,pred_rt.ens.cv2
+                          ,pred_Modal_Tree.ens.cv2
+                          ,pred_rf.ens.cv2
+                          ,pred_knn.ens.cv2
+                          ,pred_gam.ens.cv2
+                          ,pred_earth.ens.cv2
+                          ,test_cv2$Rings))                          
+                          
+   cv1 <- as.matrix(cbind(pred_lm.ens.cv1
+                          ,pred_rt.ens.cv1
+                          ,pred_Modal_Tree.ens.cv1
+                          ,pred_rf.ens.cv1
+                          ,pred_knn.ens.cv1
+                          ,pred_gam.ens.cv1
+                          ,pred_earth.ens.cv1
+                          ,test_cv1$Rings))
+   
+   cv3 <- as.matrix(cbind(pred_lm.ens.cv3
+                          ,pred_rt.ens.cv3
+                          ,pred_Modal_Tree.ens.cv3
+                          ,pred_rf.ens.cv3
+                          ,pred_knn.ens.cv3
+                          ,pred_gam.ens.cv3
+                          ,pred_earth.ens.cv3
+                          ,test_cv3$Rings))   
+   
+   cv4 <- as.matrix(cbind(pred_lm.ens.cv4
+                          ,pred_rt.ens.cv4
+                          ,pred_Modal_Tree.ens.cv4
+                          ,pred_rf.ens.cv4
+                          ,pred_knn.ens.cv4
+                          ,pred_gam.ens.cv4
+                          ,pred_earth.ens.cv4
+                          ,test_cv4$Rings))   
+   
+   cv5 <- as.matrix(cbind(pred_lm.ens.cv5
+                          ,pred_rt.ens.cv5
+                          ,pred_Modal_Tree.ens.cv5
+                          ,pred_rf.ens.cv5
+                          ,pred_knn.ens.cv5
+                          ,pred_gam.ens.cv5
+                          ,pred_earth.ens.cv5
+                          ,test_cv5$Rings))  
+   # Combine in a single dataframe
+   full_set_cv <- as.data.frame(rbind(cv1,cv2,cv3,cv4,cv5))
+   names(full_set_cv) <- c("lm","rpart","Cubist","rf","knn","gam","Mars","Rings")
+```
+
+### Train Ensemble 2 on the test_cv predictions
+
+The Ensemble regression can now be trained using the test_cv subset, and the Rings predictions form all 7 base models
+```{r Ens_2_REG, echo=TRUE, cache=TRUE}
+   # Train the Ensemble 2 Linear Regression model
+   # Use stepwise model selection 'stepAIC'
+   ens.2.lm <- stepAIC(lm(Rings ~., data = full_set_cv), direction="both")
+
+   #Summary Linear Regression
+   summary(ens.2.lm)
+```
+
+### Observations
+The Ensemble 2 regression model uses predictions from the Cubist Modal Tree, Random Forrest, KNN and Mars Models. 
+It does not use the linear regression, GAM or rpart model.
+
+### Predict Rings with Ensemble 2 Linear Regression
+Now Predict Rings using the Test set data and Generate the RMSE Score
+```{r ENS_2_MODEL, echo=TRUE, cache=TRUE, message = FALSE}
+   #Ensemble 2 Predictions 
+   # Predict using the predictions of each base models predictions on the full test set data 
+   ens.2.pred <- predict(ens.2.lm, preds_v1)
+   ens.2.RMSE <- RMSE(ens.2.pred,test_set$Rings)
+  
+   #Ensemble 2 RMSE
+   ens.2.RMSE
+```
+
+# Results
+This section combines the results of each model in a table
+```{r RESULTS2, echo=TRUE}
+  # Show the RMSE scores of each model in a single table
+   model_results_FINAL <- as_tibble(
+     
+     rbind(
+        c(model = "1 Linear Regression"
+          , RMSE =  round(lm.RMSE,4))
+       ,c(model = "2 Regression Tree using rpart"
+          , RMSE =  round(rt.RMSE,4))
+       ,c(model = "3 Modal Tree using Cubist"
+          , RMSE = round(Modal_tree.RMSE,4))
+       ,c(model = "4 Random Forrest"
+          , RMSE =  round(rf.RMSE,4))
+       ,c(model = "5 K Nearest Neighbours"
+          , RMSE =  round(knn.RMSE,4))
+       ,c(model = "6 Generalized Additive Model using Splines GAM"
+          , RMSE =  round(gam.predictions.Rings.RMSE,4))
+       ,c(model = "7 Multivariate Adaptive Regression Splines MARS"
+          , RMSE =  round(earth.RMSE,4)) 
+       ,c(model = "Ensemble 1 - average of base model predictions"
+          , RMSE =  round(ens_v1.RMSE,4)) 
+       ,c(model = "Ensemble 2 -Stepped Linear Regression of base model predictions"
+          , RMSE =  round(ens.2.RMSE,4)) 
+     )
+   )  
+    # Format the table
+       formattable(model_results_FINAL ,align = c("l","r")
+                   , format = "markdown",list(`model` = formatter(
+         "span", style = ~ style(color = "grey",font.weight = "bold")) 
+       ))
+```   
+
+# Conclusion
+
+The above Table shows the RMSE of each models predictions for Rings using the test set data.  
+The Ensemble Model which combines the predictions of the base models with a linear regression outperforms each individual model  
+_Ensemble 2 is the recommended model to use to predict the age of Abalone_
+
+In conclusion. It is possible to predict the age of Abalone by using physical dimensions, weights and sex. This can be used to save time and costs provided the RMSE is within acceptable tolerances for those in the industry.
+
+### Additional thoughts 
+In addition the below table shows RMSE scores of the Fina Ensemble 2 model predictions split by Sex.
+It shows that the RMSE is lower when predicting the age of Infant Abalone than it is when Predicting Male or Female Abalone.  
+Future improvements to this prediction model should focus features which may improve predictions of older Female and Male Abalone
+
+
+```{r RESULTS3, echo=FALSE}
+
+ENS_2_FULL <-   cbind(test_set,ens.2.pred)
+ENS_2_FULL <- as.data.frame(cbind(test_set$Rings,ens.2.pred))
+ENS_2_FULL <- cbind(test_set$Sex,ENS_2_FULL)
+names(ENS_2_FULL) <- c("Sex","Rings","Predictions")
+
+#RMSE For Male Abalone only
+ENS_2_M <- ENS_2_FULL %>%
+filter(Sex == "M")
+
+RMSE_M <- RMSE(ENS_2_M$Predictions,ENS_2_M$Rings) 
+
+#RMSE For Female Abalone only
+ENS_2_F <- ENS_2_FULL %>%
+filter(Sex == "F")
+
+RMSE_F <- RMSE(ENS_2_F$Predictions,ENS_2_F$Rings) 
+
+#RMSE For Infant Abalone only
+ENS_2_I <- ENS_2_FULL %>%
+filter(Sex == "I")
+
+RMSE_I <- RMSE(ENS_2_I$Predictions,ENS_2_I$Rings)
+
+ RMSE_BY_SEX <- as_tibble(
+     
+     as.data.frame(rbind(
+        c(Sex = "Female", RMSE =  round(RMSE_F,3))
+       ,c(Sex = "Male", RMSE =  round(RMSE_M,3))
+       ,c(Sex = "Infant", RMSE = round(RMSE_I,3))
+     ))
+   )       
+   
+formattable(RMSE_BY_SEX,align = c("l","l"),format = "markdown")
+   
+```
+
